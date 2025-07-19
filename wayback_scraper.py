@@ -490,13 +490,22 @@ def main():
     # Set state file path
     state_file_path = args.state_file or os.path.join(output_dir, STATE_FILE_NAME)
     
-    # Setup proxy configuration
+    # Setup proxy configuration - check both command line args and environment variables
     proxy_config = None
+    
+    # First check command line arguments
     if args.proxy:
         proxy_config = {
             'url': args.proxy,
             'user': args.proxy_user,
             'password': args.proxy_pass
+        }
+    # If no command line proxy, check environment variables
+    elif os.environ.get('PROXY_URL'):
+        proxy_config = {
+            'url': os.environ.get('PROXY_URL'),
+            'user': os.environ.get('PROXY_USER'),
+            'password': os.environ.get('PROXY_PASS')
         }
     
     # Setup logging
