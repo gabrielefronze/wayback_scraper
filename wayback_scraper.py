@@ -441,20 +441,26 @@ def process_csv(csv_file, output_base_dir, state_file_path, proxy_config=None):
             first_date_folder = os.path.join(output_base_dir, f"{sanitized_name}_up_to_{first_date}")
             second_date_folder = os.path.join(output_base_dir, f"{sanitized_name}_up_to_{second_date}")
             
+            start_time = time.time()
             # Download for first date
             run_wayback_downloader_with_retry(website_url, first_date, first_date_folder, state, state_file_path, proxy_config)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
             
             # Add random delay between downloads (30-90 seconds)
-            delay = random.uniform(30, 90)
+            delay = random.uniform(5, 25) + elapsed_time
             logging.info(f"Waiting {delay:.1f} seconds before next download...")
             time.sleep(delay)
             
             # Download for second date
+            start_time = time.time()
             run_wayback_downloader_with_retry(website_url, second_date, second_date_folder, state, state_file_path, proxy_config)
+            end_time = time.time()
+            elapsed_time = end_time - start_time
             
             # Add delay between different websites (60-180 seconds)
             if row_num < len(df):
-                delay = random.uniform(60, 180)
+                delay = random.uniform(7, 19) + elapsed_time
                 logging.info(f"Waiting {delay:.1f} seconds before next website...")
                 time.sleep(delay)
             
