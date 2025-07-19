@@ -448,7 +448,7 @@ def process_csv(csv_file, output_base_dir, state_file_path, proxy_config=None):
             elapsed_time = end_time - start_time
             
             # Add random delay between downloads (30-90 seconds)
-            delay = random.uniform(5, 25) + elapsed_time
+            delay = min(random.uniform(5, 25) + elapsed_time, 67)
             logging.info(f"Waiting {delay:.1f} seconds before next download...")
             time.sleep(delay)
             
@@ -460,7 +460,7 @@ def process_csv(csv_file, output_base_dir, state_file_path, proxy_config=None):
             
             # Add delay between different websites (60-180 seconds)
             if row_num < len(df):
-                delay = random.uniform(7, 19) + elapsed_time
+                delay = min(random.uniform(7, 19) + elapsed_time, 53)
                 logging.info(f"Waiting {delay:.1f} seconds before next website...")
                 time.sleep(delay)
             
