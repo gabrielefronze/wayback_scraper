@@ -248,7 +248,7 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path, pro
     # Check if already completed
     if is_download_completed(state, url, date, folder_name):
         logging.info(f"Skipping {url} (up to {date}) - already completed")
-        return True
+        return "SKIP"
     
     logging.info(f"Downloading {url} up to {date} into {output_folder}")
     
@@ -368,6 +368,8 @@ def run_wayback_downloader_with_retry(url, date, output_folder, state, state_fil
             success = run_wayback_downloader(url, date, output_folder, state, state_file_path, proxy_config)
             if success:
                 return True
+            elif success == "SKIP":
+                return "SKIP"
             
             # If failed, wait before retry
             if attempt < max_retries - 1:
@@ -443,19 +445,19 @@ def process_csv(csv_file, output_base_dir, state_file_path, proxy_config=None):
             
             start_time = time.time()
             # Download for first date
-            run_wayback_downloader_with_retry(website_url, first_date, first_date_folder, state, state_file_path, proxy_config)
+            success = run_wayback_downloader_with_retry(website_url, first_date, first_date_folder, state, state_file_path, proxy_config)
             end_time = time.time()
             elapsed_time = end_time - start_time
             
             # Add random delay between downloads (30-90 seconds)
             delay = min(random.uniform(5, 25) + elapsed_time, 67)
             logging.info(f"Waiting {delay:.1f} seconds before next download...")
-            if delay > 20:
+            if success != "SKIP":
                 time.sleep(delay)
             
             # Download for second date
             start_time = time.time()
-            run_wayback_downloader_with_retry(website_url, second_date, second_date_folder, state, state_file_path, proxy_config)
+            success = run_wayback_downloader_with_retry(website_url, second_date, second_date_folder, state, state_file_path, proxy_config)
             end_time = time.time()
             elapsed_time = end_time - start_time
             
@@ -463,7 +465,7 @@ def process_csv(csv_file, output_base_dir, state_file_path, proxy_config=None):
             if row_num < len(df):
                 delay = min(random.uniform(7, 19) + elapsed_time, 53)
                 logging.info(f"Waiting {delay:.1f} seconds before next website...")
-                if delay > 20:
+                if success != "SKIP":
                     time.sleep(delay)
             
         logging.info(f"\n Finished processing all {len(df)} websites")
