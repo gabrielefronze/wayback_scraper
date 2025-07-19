@@ -1,8 +1,0 @@
-version: '3.8'
-
-services:
-  wayback-scraper:
-    environment:
-      - PROXY_URL=http://proxy.example.com:8080
-      - PROXY_USER=username
-      - PROXY_PASS=password 
