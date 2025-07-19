@@ -210,25 +210,16 @@ def sanitize_folder_name(url):
 
 def parse_deal_date(deal_date_str):
     """
-    Parse deal date string into datetime object.
-    Supports multiple formats.
+    Parse deal date string to datetime object.
+    Handles format like "2016-09-30 00:00:00"
     """
-    formats = [
-        '%Y-%m-%d',      # 2016-09-30
-        '%d/%m/%Y',      # 30/09/2016
-        '%m/%d/%Y',      # 09/30/2016
-        '%Y/%m/%d',      # 2016/09/30
-        '%d-%m-%Y',      # 30-09-2016
-        '%m-%d-%Y',      # 09-30-2016
-    ]
-    
-    for fmt in formats:
-        try:
-            return datetime.strptime(deal_date_str.strip(), fmt)
-        except ValueError:
-            continue
-    
-    return None
+    try:
+        # Remove time part if present and parse date
+        date_part = deal_date_str.split()[0]
+        return datetime.strptime(date_part, '%Y-%m-%d')
+    except (ValueError, AttributeError) as e:
+        logging.warning(f"Could not parse deal date '{deal_date_str}': {e}")
+        return None
 
 
 def calculate_download_dates(deal_date_str):
@@ -274,7 +265,7 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path, pro
         "--directory", output_folder,
         "-o", r"/(\.(html|htm)$|\/[^\.]*\/?$)/",
         # "-x", r"/\.(jpg|jpeg|png|gif|css|js|svg|ico|woff|ttf|mp4|webp)$/",
-        "-c", "2",
+        "-c", "8",
     ]
     
     # Add proxy options if provided
