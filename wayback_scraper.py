@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import pandas as pd
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
+import random
 
 # CSV Column Constants - Modify these to match your CSV column names
 WEBSITE_URL_COLUMN = 'URL'
@@ -264,8 +265,7 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path, pro
         "--to", date,
         "--directory", output_folder,
         "-o", r"/(\.(html|htm)$|\/[^\.]*\/?$)/",
-        # "-x", r"/\.(jpg|jpeg|png|gif|css|js|svg|ico|woff|ttf|mp4|webp)$/",
-        "-c", "8",
+        "-c", "2",  # Reduce from 8 to 2
     ]
     
     # Add proxy options if provided
@@ -359,6 +359,31 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path, pro
     return success
 
 
+def run_wayback_downloader_with_retry(url, date, output_folder, state, state_file_path, proxy_config=None, max_retries=3):
+    """
+    Run wayback downloader with retry logic and exponential backoff.
+    """
+    for attempt in range(max_retries):
+        try:
+            success = run_wayback_downloader(url, date, output_folder, state, state_file_path, proxy_config)
+            if success:
+                return True
+            
+            # If failed, wait before retry
+            if attempt < max_retries - 1:
+                wait_time = (2 ** attempt) * 60  # 1, 2, 4 minutes
+                logging.info(f"Download failed, retrying in {wait_time} seconds... (attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+                
+        except Exception as e:
+            logging.error(f"Attempt {attempt + 1} failed: {e}")
+            if attempt < max_retries - 1:
+                wait_time = (2 ** attempt) * 60
+                time.sleep(wait_time)
+    
+    return False
+
+
 def process_csv(csv_file, output_base_dir, state_file_path, proxy_config=None):
     """
     Process the CSV file and download websites for each row.
@@ -417,10 +442,21 @@ def process_csv(csv_file, output_base_dir, state_file_path, proxy_config=None):
             second_date_folder = os.path.join(output_base_dir, f"{sanitized_name}_up_to_{second_date}")
             
             # Download for first date
-            run_wayback_downloader(website_url, first_date, first_date_folder, state, state_file_path, proxy_config)
+            run_wayback_downloader_with_retry(website_url, first_date, first_date_folder, state, state_file_path, proxy_config)
+            
+            # Add random delay between downloads (30-90 seconds)
+            delay = random.uniform(30, 90)
+            logging.info(f"Waiting {delay:.1f} seconds before next download...")
+            time.sleep(delay)
             
             # Download for second date
-            run_wayback_downloader(website_url, second_date, second_date_folder, state, state_file_path, proxy_config)
+            run_wayback_downloader_with_retry(website_url, second_date, second_date_folder, state, state_file_path, proxy_config)
+            
+            # Add delay between different websites (60-180 seconds)
+            if row_num < len(df):
+                delay = random.uniform(60, 180)
+                logging.info(f"Waiting {delay:.1f} seconds before next website...")
+                time.sleep(delay)
             
         logging.info(f"\n Finished processing all {len(df)} websites")
         

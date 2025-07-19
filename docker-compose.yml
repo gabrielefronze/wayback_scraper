@@ -21,6 +21,7 @@ services:
       - PROXY_URL=${PROXY_URL:-socks5://127.0.0.1:9050}
       - PROXY_USER=${PROXY_USER:-}
       - PROXY_PASS=${PROXY_PASS:-}
+      - TOR_NEW_CIRCUIT_PER_REQUEST=true
     restart: unless-stopped
     # Keep container running for debugging if needed
     tty: true
