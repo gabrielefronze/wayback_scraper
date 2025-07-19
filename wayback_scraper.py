@@ -265,7 +265,7 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path, pro
         "--to", date,
         "--directory", output_folder,
         "-o", r"/(\.(html|htm)$|\/[^\.]*\/?$)/",
-        "-c", "2",  # Reduce from 8 to 2
+        "-c", "6",  # Reduce from 8 to 2
     ]
     
     # Add proxy options if provided
