@@ -366,10 +366,10 @@ def run_wayback_downloader_with_retry(url, date, output_folder, state, state_fil
     for attempt in range(max_retries):
         try:
             success = run_wayback_downloader(url, date, output_folder, state, state_file_path, proxy_config)
+            if success == "SKIP":
+                return "SKIP"
             if success:
                 return True
-            elif success == "SKIP":
-                return "SKIP"
             
             # If failed, wait before retry
             if attempt < max_retries - 1:
