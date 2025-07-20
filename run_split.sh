@@ -13,8 +13,8 @@ PARALLEL=false
 INPUT_FILE="data.csv"
 BASE_OUTPUT_DIR="downloads"
 SHARED_DOWNLOADS=false
-MIN_DELAY=30
-MAX_DELAY=180
+MIN_DELAY=60   # Increased from 30 to 60 seconds for better anti-ban protection
+MAX_DELAY=300  # Increased from 180 to 300 seconds for better anti-ban protection
 
 # Function to display usage
 usage() {
@@ -302,6 +302,9 @@ services:
       - PROXY_USER=\${PROXY_USER:-}
       - PROXY_PASS=\${PROXY_PASS:-}
       - TOR_NEW_CIRCUIT_PER_REQUEST=true
+      # Add connection pool limits for better anti-ban protection
+      - CONNECTION_POOL_SIZE=5
+      - RATE_LIMIT=0.5
     restart: unless-stopped
     # Keep container running for debugging if needed
     tty: true

@@ -265,7 +265,7 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path, pro
         "--to", date,
         "--directory", output_folder,
         "-o", r"/(\.(html|htm)$|\/[^\.]*\/?$)/",
-        "-c", "6",  # Reduce from 8 to 2
+        "-c", "2",  # Reduced from 6 to 2 for better anti-ban protection
     ]
     
     # Add proxy options if provided
@@ -311,6 +311,9 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path, pro
         download_logger.error(error_msg)
         if e.stderr:
             download_logger.error(f"Error details:\n{e.stderr}")
+            # Check for connection refused errors
+            if "connection refused" in e.stderr.lower() or "connection reset" in e.stderr.lower():
+                logging.warning(f"Connection refused/reset detected for {url} - may be rate limited")
         if e.stdout:
             download_logger.info(f"Command output:\n{e.stdout}")
         logging.error(error_msg)
@@ -359,7 +362,7 @@ def run_wayback_downloader(url, date, output_folder, state, state_file_path, pro
     return success
 
 
-def run_wayback_downloader_with_retry(url, date, output_folder, state, state_file_path, proxy_config=None, max_retries=3):
+def run_wayback_downloader_with_retry(url, date, output_folder, state, state_file_path, proxy_config=None, max_retries=5):
     """
     Run wayback downloader with retry logic and exponential backoff.
     """
@@ -371,16 +374,16 @@ def run_wayback_downloader_with_retry(url, date, output_folder, state, state_fil
             if success:
                 return True
             
-            # If failed, wait before retry
+            # If failed, wait before retry with longer delays
             if attempt < max_retries - 1:
-                wait_time = (2 ** attempt) * 60  # 1, 2, 4 minutes
+                wait_time = (2 ** attempt) * 120  # 2, 4, 8, 16 minutes (increased from 60)
                 logging.info(f"Download failed, retrying in {wait_time} seconds... (attempt {attempt + 1}/{max_retries})")
                 time.sleep(wait_time)
                 
         except Exception as e:
             logging.error(f"Attempt {attempt + 1} failed: {e}")
             if attempt < max_retries - 1:
-                wait_time = (2 ** attempt) * 60
+                wait_time = (2 ** attempt) * 120
                 time.sleep(wait_time)
     
     return False
@@ -449,8 +452,8 @@ def process_csv(csv_file, output_base_dir, state_file_path, proxy_config=None):
             end_time = time.time()
             elapsed_time = end_time - start_time
             
-            # Add random delay between downloads (30-90 seconds)
-            delay = min(random.uniform(5, 25) + elapsed_time, 67)
+            # Add random delay between downloads (increased for better anti-ban protection)
+            delay = min(random.uniform(15, 45) + elapsed_time, 90)
             logging.info(f"Waiting {delay:.1f} seconds before next download...")
             logging.info(f"Success: {success}")
             if success == True:
@@ -462,9 +465,9 @@ def process_csv(csv_file, output_base_dir, state_file_path, proxy_config=None):
             end_time = time.time()
             elapsed_time = end_time - start_time
             
-            # Add delay between different websites (60-180 seconds)
+            # Add delay between different websites (increased for better anti-ban protection)
             if row_num < len(df):
-                delay = min(random.uniform(7, 19) + elapsed_time, 53)
+                delay = min(random.uniform(30, 60) + elapsed_time, 120)
                 logging.info(f"Waiting {delay:.1f} seconds before next website...")
                 logging.info(f"Success: {success}")
                 if success == True:
