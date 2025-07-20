@@ -305,7 +305,7 @@ services:
       # Add connection pool limits for better anti-ban protection
       - CONNECTION_POOL_SIZE=5
       - RATE_LIMIT=0.5
-    restart: unless-stopped
+    restart: no  # Changed from "unless-stopped" to "no"
     # Keep container running for debugging if needed
     tty: true
     stdin_open: true
