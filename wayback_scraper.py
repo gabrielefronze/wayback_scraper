@@ -127,6 +127,26 @@ def is_download_completed(state, website_url, date, folder_name):
         return False
     
     download_key = f"{website_url}_{date}_{folder_name}"
+    
+    # Check if marked as completed in state
+    if download_key not in state['downloads']:
+        return False
+    
+    # Additional check: if folder only contains .log files starting with "download", 
+    # consider it not completed and retry
+    folder_path = os.path.join(os.getcwd(), folder_name)
+    if os.path.exists(folder_path) and os.path.isdir(folder_path):
+        files = os.listdir(folder_path)
+        if files:  # If folder is not empty
+            # Check if all files are .log files starting with "download"
+            all_log_files = all(
+                file.startswith("download") and file.endswith(".log") 
+                for file in files
+            )
+            if all_log_files and len(files) > 0:
+                logging.info(f"Folder {folder_name} only contains download log files - will retry")
+                return False
+    
     return download_key in state['downloads']
 
 
