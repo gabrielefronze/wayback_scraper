@@ -13,6 +13,8 @@ PARALLEL=false
 INPUT_FILE="data.csv"
 BASE_OUTPUT_DIR="downloads"
 SHARED_DOWNLOADS=false
+MIN_DELAY=30
+MAX_DELAY=180
 
 # Function to display usage
 usage() {
@@ -27,6 +29,8 @@ usage() {
     echo "  -s, --shared              Use shared downloads folder (default: separate folders)"
     echo "  -i, --input FILE          Input CSV file (default: data.csv)"
     echo "  -o, --output DIR          Base output directory (default: downloads)"
+    echo "  --min-delay SECONDS       Minimum delay between parallel starts (default: 30)"
+    echo "  --max-delay SECONDS       Maximum delay between parallel starts (default: 180)"
     echo "  -h, --help                Show this help message"
     echo ""
     echo "Examples:"
@@ -63,6 +67,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         -o|--output)
             BASE_OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --min-delay)
+            MIN_DELAY="$2"
+            shift 2
+            ;;
+        --max-delay)
+            MAX_DELAY="$2"
             shift 2
             ;;
         -h|--help)
@@ -145,6 +157,9 @@ echo "📁 Base output directory: $BASE_OUTPUT_DIR"
 echo "🔄 Split type: $SPLIT_TYPE ($SPLIT_VALUE)"
 echo "⚡ Parallel execution: $PARALLEL"
 echo "🗂️  Shared downloads: $SHARED_DOWNLOADS"
+if [ "$PARALLEL" = true ]; then
+    echo "🛡️  Anti-ban delays: ${MIN_DELAY}-${MAX_DELAY} seconds between starts"
+fi
 echo ""
 
 # Count total rows (excluding header)
@@ -319,17 +334,30 @@ echo "🚀 Starting scraper processes..."
 echo ""
 
 if [ "$PARALLEL" = true ]; then
-    echo "⚡ Running splits in parallel..."
+    echo "⚡ Running splits in parallel with random delays..."
     
     # Array to store background process PIDs
     PIDS=()
     
-    # Start all splits in background
+    # Calculate random delays to avoid getting banned
+    echo "🛡️  Anti-ban protection: Random delays between ${MIN_DELAY}-${MAX_DELAY} seconds"
+    echo ""
+    
+    # Start all splits in background with random delays
     for i in $(seq 1 $SPLIT_COUNT); do
+        if [ $i -gt 1 ]; then
+            # Generate random delay between MIN_DELAY and MAX_DELAY seconds
+            DELAY=$((RANDOM % (MAX_DELAY - MIN_DELAY + 1) + MIN_DELAY))
+            echo "⏳ Waiting $DELAY seconds before starting split $i (anti-ban protection)..."
+            sleep $DELAY
+        fi
+        
         echo "🔄 Starting split $i in background..."
         run_split "$i" &
         PIDS+=($!)
-        sleep 2  # Small delay to avoid overwhelming the system
+        
+        # Small additional delay to avoid overwhelming the system
+        sleep 5
     done
     
     echo "⏳ Waiting for all splits to complete..."
