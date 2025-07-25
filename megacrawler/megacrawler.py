@@ -91,9 +91,20 @@ class KeywordAnalyzer:
         return patterns
     
     def clean_html(self, html_content: str) -> str:
-        """Extract clean text from HTML content."""
+        """Extract clean text from HTML/XML content."""
         try:
-            soup = BeautifulSoup(html_content, 'html.parser')
+            # Filter out the XMLParsedAsHTMLWarning
+            from bs4 import XMLParsedAsHTMLWarning
+            import warnings
+            warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
+            
+            # Try HTML parser first, fall back to XML if needed
+            try:
+                soup = BeautifulSoup(html_content, 'html.parser')
+            except Exception:
+                # If HTML parser fails, try XML parser
+                soup = BeautifulSoup(html_content, 'xml')
+            
             # Remove script and style elements
             for script in soup(["script", "style"]):
                 script.decompose()
@@ -104,7 +115,7 @@ class KeywordAnalyzer:
             return text
             
         except Exception as e:
-            logger.warning(f"Failed to parse HTML: {e}")
+            logger.warning(f"Failed to parse HTML/XML: {e}")
             return ""
     
     def count_keywords_in_file(self, filepath: Path) -> Tuple[str, Dict[str, int]]:
