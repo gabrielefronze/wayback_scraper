@@ -228,31 +228,44 @@ class KeywordAnalyzer:
                 for site_path in site_dirs
             }
             
-            # Process completed tasks
-            for future in tqdm(as_completed(future_to_site), 
-                             total=len(site_dirs), 
-                             desc="Processing sites"):
-                try:
-                    site_name, url, date, site_result = future.result()
-                    
-                    for keyword, data in site_result.items():
-                        row_data = {
-                            "site": site_name,
-                            "website_url": url,
-                            "date": date,
-                            "keyword": keyword,
-                            "total_count": data['total'],
-                            "file_count": len(data['files']),
-                        }
+            # Process completed tasks with overall progress bar
+            completed_sites = 0
+            total_sites = len(site_dirs)
+            
+            with tqdm(total=total_sites, desc="Processing sites", unit="site") as pbar:
+                for future in as_completed(future_to_site):
+                    try:
+                        site_name, url, date, site_result = future.result()
+                        completed_sites += 1
                         
-                        if self.config.include_file_paths:
-                            row_data["files_with_occurrence"] = '; '.join(sorted(data['files']))
+                        # Update progress bar with current site info
+                        pbar.set_postfix({
+                            'current': site_name,
+                            'completed': f"{completed_sites}/{total_sites}"
+                        })
                         
-                        all_site_data.append(row_data)
+                        for keyword, data in site_result.items():
+                            row_data = {
+                                "site": site_name,
+                                "website_url": url,
+                                "date": date,
+                                "keyword": keyword,
+                                "total_count": data['total'],
+                                "file_count": len(data['files']),
+                            }
+                            
+                            if self.config.include_file_paths:
+                                row_data["files_with_occurrence"] = '; '.join(sorted(data['files']))
+                            
+                            all_site_data.append(row_data)
                         
-                except Exception as e:
-                    site_path = future_to_site[future]
-                    logger.error(f"Failed to process {site_path}: {e}")
+                        pbar.update(1)
+                        
+                    except Exception as e:
+                        site_path = future_to_site[future]
+                        logger.error(f"Failed to process {site_path}: {e}")
+                        completed_sites += 1
+                        pbar.update(1)
         
         # Create DataFrame and sort
         df = pd.DataFrame(all_site_data)
