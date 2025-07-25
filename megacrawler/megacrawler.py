@@ -42,6 +42,7 @@ class Config:
     case_sensitive: bool = False
     include_file_paths: bool = True
     chunk_size: int = 1000
+    show_file_progress: bool = False  # New option to control file progress bars
 
 class KeywordAnalyzer:
     """Main class for analyzing keyword frequencies in HTML files."""
@@ -195,7 +196,10 @@ class KeywordAnalyzer:
         html_files = self.get_html_files(site_path)
         logger.info(f"Processing {len(html_files)} files in {site_name}")
         
-        for filepath in tqdm(html_files, desc=f"Processing {site_name}", leave=False):
+        # Use tqdm only if show_file_progress is enabled
+        file_iterator = tqdm(html_files, desc=f"Processing {site_name}", leave=False) if self.config.show_file_progress else html_files
+        
+        for filepath in file_iterator:
             filename, file_counts = self.count_keywords_in_file(filepath)
             
             for keyword, count in file_counts.items():
@@ -207,7 +211,7 @@ class KeywordAnalyzer:
         return site_name, url, date, dict(site_results)
     
     def run_analysis(self) -> pd.DataFrame:
-        """Run the complete keyword analysis."""
+        """Run the complete keyword analysis with incremental output."""
         base_dir = Path(self.config.input_dir)
         if not base_dir.exists():
             raise FileNotFoundError(f"Input directory not found: {base_dir}")
@@ -218,8 +222,18 @@ class KeywordAnalyzer:
         
         logger.info(f"Found {len(site_dirs)} site directories")
         
-        all_site_data = []
+        # Initialize output file with headers
+        output_path = Path(self.config.output_file)
+        headers = ["site", "website_url", "date", "keyword", "total_count", "file_count"]
+        if self.config.include_file_paths:
+            headers.append("files_with_occurrence")
+        
+        # Write headers to file
+        with open(output_path, 'w', newline='', encoding='utf-8') as f:
+            f.write(','.join(headers) + '\n')
+        
         max_workers = self.config.max_workers or min(os.cpu_count(), len(site_dirs))
+        total_results = 0
         
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
@@ -241,25 +255,35 @@ class KeywordAnalyzer:
                         # Update progress bar with current site info
                         pbar.set_postfix({
                             'current': site_name,
-                            'completed': f"{completed_sites}/{total_sites}"
+                            'completed': f"{completed_sites}/{total_sites}",
+                            'results': total_results
                         })
                         
-                        for keyword, data in site_result.items():
-                            row_data = {
-                                "site": site_name,
-                                "website_url": url,
-                                "date": date,
-                                "keyword": keyword,
-                                "total_count": data['total'],
-                                "file_count": len(data['files']),
-                            }
-                            
-                            if self.config.include_file_paths:
-                                row_data["files_with_occurrence"] = '; '.join(sorted(data['files']))
-                            
-                            all_site_data.append(row_data)
+                        # Write results for this site to file immediately
+                        site_results_count = 0
+                        with open(output_path, 'a', newline='', encoding='utf-8') as f:
+                            for keyword, data in site_result.items():
+                                row_data = {
+                                    "site": site_name,
+                                    "website_url": url,
+                                    "date": date,
+                                    "keyword": keyword,
+                                    "total_count": data['total'],
+                                    "file_count": len(data['files']),
+                                }
+                                
+                                if self.config.include_file_paths:
+                                    row_data["files_with_occurrence"] = '; '.join(sorted(data['files']))
+                                
+                                # Write row to file
+                                row_values = [str(row_data[col]) for col in headers]
+                                f.write(','.join(row_values) + '\n')
+                                site_results_count += 1
                         
+                        total_results += site_results_count
                         pbar.update(1)
+                        
+                        logger.info(f"Completed {site_name}: {site_results_count} keyword results written to {output_path}")
                         
                     except Exception as e:
                         site_path = future_to_site[future]
@@ -267,17 +291,24 @@ class KeywordAnalyzer:
                         completed_sites += 1
                         pbar.update(1)
         
-        # Create DataFrame and sort
-        df = pd.DataFrame(all_site_data)
-        if not df.empty:
-            df.sort_values(by=["website_url", "date", "keyword"], inplace=True)
+        logger.info(f"Analysis complete! Total results written: {total_results}")
         
-        return df
+        # Return DataFrame for compatibility (read from the file we just wrote)
+        try:
+            df = pd.read_csv(output_path)
+            if not df.empty:
+                df.sort_values(by=["website_url", "date", "keyword"], inplace=True)
+                # Write sorted data back to file
+                df.to_csv(output_path, index=False)
+            return df
+        except Exception as e:
+            logger.warning(f"Could not read results back as DataFrame: {e}")
+            return pd.DataFrame()
     
     def save_results(self, df: pd.DataFrame) -> None:
-        """Save results to CSV file."""
+        """Save results to CSV file (now handled in run_analysis)."""
         try:
-            df.to_csv(self.config.output_file, index=False)
+            # Results are already saved during computation
             logger.info(f"Results saved to {self.config.output_file}")
             
             # Print summary statistics
@@ -286,8 +317,10 @@ class KeywordAnalyzer:
             logger.info(f"  - Files failed: {self.stats['files_failed']}")
             logger.info(f"  - Keywords found: {self.stats['keywords_found']}")
             logger.info(f"  - Total occurrences: {self.stats['total_occurrences']}")
-            logger.info(f"  - Sites analyzed: {df['site'].nunique() if not df.empty else 0}")
-            logger.info(f"  - Unique keywords found: {df['keyword'].nunique() if not df.empty else 0}")
+            
+            if not df.empty:
+                logger.info(f"  - Sites analyzed: {df['site'].nunique()}")
+                logger.info(f"  - Unique keywords found: {df['keyword'].nunique()}")
             
         except Exception as e:
             logger.error(f"Failed to save results: {e}")
@@ -303,6 +336,7 @@ Examples:
   python megacrawler.py
   python megacrawler.py --input-dir data --output-file results.csv
   python megacrawler.py --max-workers 4 --min-occurrence 2
+  python megacrawler.py --show-file-progress  # Show progress for individual files
         """
     )
     
@@ -322,6 +356,8 @@ Examples:
                        help="Exclude file paths from output")
     parser.add_argument("--chunk-size", type=int, default=1000,
                        help="Chunk size for processing (default: 1000)")
+    parser.add_argument("--show-file-progress", action="store_true",
+                       help="Show progress bars for individual files (default: False)")
     
     args = parser.parse_args()
     
@@ -334,7 +370,8 @@ Examples:
         min_occurrence_threshold=args.min_occurrence,
         case_sensitive=args.case_sensitive,
         include_file_paths=not args.no_file_paths,
-        chunk_size=args.chunk_size
+        chunk_size=args.chunk_size,
+        show_file_progress=args.show_file_progress
     )
     
     try:
