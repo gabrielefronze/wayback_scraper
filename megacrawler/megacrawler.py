@@ -64,8 +64,9 @@ class KeywordAnalyzer:
             if not keywords_path.exists():
                 raise FileNotFoundError(f"Keywords file not found: {keywords_path}")
             
-            keywords_df = pd.read_csv(keywords_path, header=None)
-            keywords = [kw.strip() for kw in keywords_df[0].dropna()]
+            # Read file as plain text - one keyword per line
+            with open(keywords_path, 'r', encoding='utf-8') as f:
+                keywords = [line.strip() for line in f if line.strip()]
             
             if not keywords:
                 raise ValueError("No keywords found in file")
