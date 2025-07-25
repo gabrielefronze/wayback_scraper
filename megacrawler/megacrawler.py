@@ -157,9 +157,39 @@ class KeywordAnalyzer:
         
         return html_files
     
-    def process_site(self, site_path: Path) -> Tuple[str, Dict]:
+    def parse_site_info(self, site_name: str) -> Tuple[str, str]:
+        """Parse website URL and date from site folder name."""
+        try:
+            # Expected format: www_vennli.com_up_to_20160330
+            if '_up_to_' in site_name:
+                parts = site_name.split('_up_to_')
+                if len(parts) == 2:
+                    url = parts[0].replace('_', '.')  # Convert www_vennli_com to www.vennli.com
+                    date_str = parts[1]
+                    
+                    # Format date for better readability (YYYY-MM-DD)
+                    if len(date_str) == 8:  # YYYYMMDD format
+                        formatted_date = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
+                    else:
+                        formatted_date = date_str
+                    
+                    return url, formatted_date
+                else:
+                    logger.warning(f"Unexpected site name format: {site_name}")
+                    return site_name, "Unknown"
+            else:
+                # Handle cases where the format doesn't match
+                logger.warning(f"Site name doesn't contain '_up_to_': {site_name}")
+                return site_name, "Unknown"
+                
+        except Exception as e:
+            logger.warning(f"Failed to parse site info for {site_name}: {e}")
+            return site_name, "Unknown"
+    
+    def process_site(self, site_path: Path) -> Tuple[str, str, str, Dict]:
         """Process all HTML files in a site directory."""
         site_name = site_path.name
+        url, date = self.parse_site_info(site_name)
         site_results = defaultdict(lambda: {'total': 0, 'files': set()})
         
         html_files = self.get_html_files(site_path)
@@ -174,7 +204,7 @@ class KeywordAnalyzer:
                     relative_path = filepath.relative_to(site_path)
                     site_results[keyword]['files'].add(str(relative_path))
         
-        return site_name, dict(site_results)
+        return site_name, url, date, dict(site_results)
     
     def run_analysis(self) -> pd.DataFrame:
         """Run the complete keyword analysis."""
@@ -203,11 +233,13 @@ class KeywordAnalyzer:
                              total=len(site_dirs), 
                              desc="Processing sites"):
                 try:
-                    site_name, site_result = future.result()
+                    site_name, url, date, site_result = future.result()
                     
                     for keyword, data in site_result.items():
                         row_data = {
                             "site": site_name,
+                            "website_url": url,
+                            "date": date,
                             "keyword": keyword,
                             "total_count": data['total'],
                             "file_count": len(data['files']),
@@ -225,7 +257,7 @@ class KeywordAnalyzer:
         # Create DataFrame and sort
         df = pd.DataFrame(all_site_data)
         if not df.empty:
-            df.sort_values(by=["site", "keyword"], inplace=True)
+            df.sort_values(by=["website_url", "date", "keyword"], inplace=True)
         
         return df
     
