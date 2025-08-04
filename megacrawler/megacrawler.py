@@ -273,13 +273,9 @@ class KeywordAnalyzer:
             logger.warning("No results to process")
             return pd.DataFrame()
         
-        # Get all unique keywords across all sites
-        all_keywords = set()
-        for result in all_results:
-            all_keywords.update(result['keywords_found'])
-        
-        # Sort keywords for consistent column order
-        sorted_keywords = sorted(all_keywords)
+        # Use ALL keywords from the keywords file, not just the ones found
+        sorted_keywords = sorted(self.keywords)
+        logger.info(f"Creating output with {len(sorted_keywords)} keyword columns")
         
         # Create DataFrame with wide format
         rows = []
