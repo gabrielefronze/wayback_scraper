@@ -211,7 +211,7 @@ class KeywordAnalyzer:
         return site_name, url, date, dict(site_results)
     
     def run_analysis(self) -> pd.DataFrame:
-        """Run the complete keyword analysis with incremental output."""
+        """Run the complete keyword analysis with wide format output."""
         base_dir = Path(self.config.input_dir)
         if not base_dir.exists():
             raise FileNotFoundError(f"Input directory not found: {base_dir}")
@@ -222,18 +222,8 @@ class KeywordAnalyzer:
         
         logger.info(f"Found {len(site_dirs)} site directories")
         
-        # Initialize output file with headers
-        output_path = Path(self.config.output_file)
-        headers = ["site", "website_url", "date", "keyword", "total_count", "file_count"]
-        if self.config.include_file_paths:
-            headers.append("files_with_occurrence")
-        
-        # Write headers to file
-        with open(output_path, 'w', newline='', encoding='utf-8') as f:
-            f.write(','.join(headers) + '\n')
-        
         max_workers = self.config.max_workers or min(os.cpu_count(), len(site_dirs))
-        total_results = 0
+        all_results = []
         
         with ProcessPoolExecutor(max_workers=max_workers) as executor:
             # Submit all tasks
@@ -256,34 +246,19 @@ class KeywordAnalyzer:
                         pbar.set_postfix({
                             'current': site_name,
                             'completed': f"{completed_sites}/{total_sites}",
-                            'results': total_results
+                            'results': len(all_results)
                         })
                         
-                        # Write results for this site to file immediately
-                        site_results_count = 0
-                        with open(output_path, 'a', newline='', encoding='utf-8') as f:
-                            for keyword, data in site_result.items():
-                                row_data = {
-                                    "site": site_name,
-                                    "website_url": url,
-                                    "date": date,
-                                    "keyword": keyword,
-                                    "total_count": data['total'],
-                                    "file_count": len(data['files']),
-                                }
-                                
-                                if self.config.include_file_paths:
-                                    row_data["files_with_occurrence"] = '; '.join(sorted(data['files']))
-                                
-                                # Write row to file
-                                row_values = [str(row_data[col]) for col in headers]
-                                f.write(','.join(row_values) + '\n')
-                                site_results_count += 1
+                        # Store results for this site
+                        all_results.append({
+                            'company': site_name,
+                            'website': url,
+                            'date': date,
+                            'keywords_found': set(site_result.keys())
+                        })
                         
-                        total_results += site_results_count
                         pbar.update(1)
-                        
-                        logger.info(f"Completed {site_name}: {site_results_count} keyword results written to {output_path}")
+                        logger.info(f"Completed {site_name}: {len(site_result)} keywords found")
                         
                     except Exception as e:
                         site_path = future_to_site[future]
@@ -291,19 +266,42 @@ class KeywordAnalyzer:
                         completed_sites += 1
                         pbar.update(1)
         
-        logger.info(f"Analysis complete! Total results written: {total_results}")
+        logger.info(f"Analysis complete! Processing {len(all_results)} sites")
         
-        # Return DataFrame for compatibility (read from the file we just wrote)
-        try:
-            df = pd.read_csv(output_path)
-            if not df.empty:
-                df.sort_values(by=["website_url", "date", "keyword"], inplace=True)
-                # Write sorted data back to file
-                df.to_csv(output_path, index=False)
-            return df
-        except Exception as e:
-            logger.warning(f"Could not read results back as DataFrame: {e}")
+        # Create wide format DataFrame
+        if not all_results:
+            logger.warning("No results to process")
             return pd.DataFrame()
+        
+        # Get all unique keywords across all sites
+        all_keywords = set()
+        for result in all_results:
+            all_keywords.update(result['keywords_found'])
+        
+        # Sort keywords for consistent column order
+        sorted_keywords = sorted(all_keywords)
+        
+        # Create DataFrame with wide format
+        rows = []
+        for result in all_results:
+            row = {
+                'company': result['company'],
+                'website': result['website'],
+                'date': result['date']
+            }
+            # Add keyword columns - "1" if keyword found, "0" if not
+            for keyword in sorted_keywords:
+                row[keyword] = "1" if keyword in result['keywords_found'] else "0"
+            rows.append(row)
+        
+        df = pd.DataFrame(rows)
+        
+        # Save to CSV
+        output_path = Path(self.config.output_file)
+        df.to_csv(output_path, index=False)
+        logger.info(f"Results saved to {output_path}")
+        
+        return df
     
     def save_results(self, df: pd.DataFrame) -> None:
         """Save results to CSV file (now handled in run_analysis)."""
@@ -319,8 +317,8 @@ class KeywordAnalyzer:
             logger.info(f"  - Total occurrences: {self.stats['total_occurrences']}")
             
             if not df.empty:
-                logger.info(f"  - Sites analyzed: {df['site'].nunique()}")
-                logger.info(f"  - Unique keywords found: {df['keyword'].nunique()}")
+                logger.info(f"  - Sites analyzed: {df['company'].nunique()}")
+                logger.info(f"  - Unique keywords found: {df.shape[1] - 3}") # Exclude 'company', 'website', 'date'
             
         except Exception as e:
             logger.error(f"Failed to save results: {e}")
